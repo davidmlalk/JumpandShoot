@@ -1,0 +1,53 @@
+int xpos;
+int ypos;
+int v;
+int yv;
+
+int[] player = new int [] {1, 2};
+int[] playerpos = new int [] {xpos, ypos, yv};
+int[] projektil = new int [] {xpos, ypos, v};
+
+int playerDir;
+int lastMove = 0;
+int currentHighScore = 0;
+int moveDelay = 100;
+String streak = "";
+PFont headingFont;
+PFont textFont;
+PFont smallFont;
+
+void setup(){
+  background(250);
+  size(500, 350);
+  headingFont = createFont("Liberation Sans Bold", 32);
+  textFont = createFont("Liberation Sans", 16);
+  smallFont = createFont("Liberation Sans", 12);
+}
+
+void draw(){
+
+}
+
+void menu(){
+
+}
+
+void end(){
+
+}
+
+void anpassung(){
+
+}
+
+void spieler(){
+  
+}
+
+void projektil(){
+
+}
+
+void plattform1(){
+
+}
