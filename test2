@@ -1,0 +1,239 @@
+Player playerA, playerB;
+ArrayList<Platform> platforms = new ArrayList<Platform>();
+ArrayList<Box> boxes = new ArrayList<Box>();
+
+void setup() {
+  size(1500, 900);
+  textSize(24);
+
+  // Plattformen
+  platforms.add(new Platform(0, height/2, 550, 30));
+  platforms.add(new Platform(width/2 - 150, height/2 + 100, 500, 30));
+  platforms.add(new Platform(width - 300, height/2, 500, 30));
+
+  // Kisten
+  boxes.add(new Box(300, height/2 - 50));
+  boxes.add(new Box(width/2, height/2 - 100));
+  boxes.add(new Box(1200, height/2 - 50));
+
+  // Spieler initialisieren
+  playerA = new Player(200, height/2 - 50, color(255, 0, 0), 'a', 'd', 'w', 'e');
+  playerB = new Player(1300, height/2 - 50, color(100, 0, 200), ' ', ' ', ' ', ' '); // Dummy
+  playerB.setKeys(LEFT, RIGHT, UP, DOWN); // Setzt richtige KeyCodes
+}
+
+void draw() {
+  background(95, 180, 255);
+
+  for (Platform p : platforms) p.display();
+
+  for (int i = boxes.size() - 1; i >= 0; i--) {
+    Box b = boxes.get(i);
+    b.display();
+    if (playerA.collidesWithBox(b)) {
+      playerA.reloadAmmo();
+      boxes.remove(i);
+    } else if (playerB.collidesWithBox(b)) {
+      playerB.reloadAmmo();
+      boxes.remove(i);
+    }
+  }
+
+  playerA.update(platforms);
+  playerB.update(platforms);
+
+  playerA.checkProjectilesHit(playerB);
+  playerB.checkProjectilesHit(playerA);
+
+  playerA.display();
+  playerB.display();
+
+  fill(0);
+  textAlign(LEFT);
+  text("Spieler A - Punkte: " + playerA.score + "  Munition: " + playerA.ammo, 20, 40);
+  textAlign(RIGHT);
+  text("Spieler B - Punkte: " + playerB.score + "  Munition: " + playerB.ammo, width - 20, 40);
+}
+
+void keyPressed() {
+  playerA.handleKeyPressed(key, keyCode);
+  playerB.handleKeyPressed(key, keyCode);
+}
+
+void keyReleased() {
+  playerA.handleKeyReleased(key, keyCode);
+  playerB.handleKeyReleased(key, keyCode);
+}
+
+// === Player ===
+class Player {
+  float x, y, yv = 0;
+  int c, facing = 1;
+  boolean left, right, jump, shoot, onGround = false;
+  ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
+  int score = 0, ammo = 5, maxAmmo = 10;
+
+  char lK, rK, jK, sK;
+  int lKC, rKC, jKC, sKC;
+  boolean useKeyCode = false;
+
+  Player(float x, float y, int c, char lK, char rK, char jK, char sK) {
+    this.x = x; this.y = y; this.c = c;
+    this.lK = lK; this.rK = rK; this.jK = jK; this.sK = sK;
+  }
+
+  void setKeys(int l, int r, int j, int s) {
+    lKC = l; rKC = r; jKC = j; sKC = s; useKeyCode = true;
+  }
+
+  void handleKeyPressed(char k, int kc) {
+    if (!useKeyCode) {
+      if (k == lK) left = true;
+      if (k == rK) right = true;
+      if (k == jK) jump = true;
+      if (k == sK) shoot = true;
+    } else {
+      if (kc == lKC) left = true;
+      if (kc == rKC) right = true;
+      if (kc == jKC) jump = true;
+      if (kc == sKC) shoot = true;
+    }
+  }
+
+  void handleKeyReleased(char k, int kc) {
+    if (!useKeyCode) {
+      if (k == lK) left = false;
+      if (k == rK) right = false;
+      if (k == jK) jump = false;
+      if (k == sK) shoot = false;
+    } else {
+      if (kc == lKC) left = false;
+      if (kc == rKC) right = false;
+      if (kc == jKC) jump = false;
+      if (kc == sKC) shoot = false;
+    }
+  }
+
+  void update(ArrayList<Platform> plats) {
+    if (left) { x -= 5; facing = -1; }
+    if (right) { x += 5; facing = 1; }
+
+    if (jump && onGround) { yv = -15; onGround = false; }
+
+    yv += 1;
+    y += yv;
+
+    onGround = false;
+    for (Platform p : plats) {
+      if (y + 20 >= p.y && y + 20 <= p.y + p.h && x > p.x && x < p.x + p.w && yv >= 0) {
+        y = p.y - 20;
+        yv = 0;
+        onGround = true;
+      }
+    }
+
+    if (y > height + 100) respawn();
+
+    if (shoot && ammo > 0) {
+      projectiles.add(new Projectile(x + facing * 20, y, facing));
+      ammo--;
+      shoot = false;
+    }
+
+    for (int i = projectiles.size() - 1; i >= 0; i--) {
+      Projectile p = projectiles.get(i);
+      p.update();
+      p.display();
+      if (p.offscreen()) projectiles.remove(i);
+    }
+  }
+
+  void display() {
+    pushMatrix();
+    translate(x, y);
+    fill(c);
+    beginShape();
+    vertex(facing * 20, 0);
+    vertex(-facing * 15, -15);
+    vertex(-facing * 15, 15);
+    endShape(CLOSE);
+    popMatrix();
+  }
+
+  void checkProjectilesHit(Player other) {
+    for (int i = projectiles.size() - 1; i >= 0; i--) {
+      Projectile p = projectiles.get(i);
+      if (dist(p.x, p.y, other.x, other.y) < 20) {
+        other.x += p.dir * -30;
+        other.yv = -10;
+        score++;
+        projectiles.remove(i);
+      }
+    }
+  }
+
+  void respawn() {
+    if (this == playerA) x = 200;
+    else x = 1300;
+    y = height/2 - 50;
+    yv = 0;
+    ammo = maxAmmo;
+  }
+
+  boolean collidesWithBox(Box b) {
+    return dist(x, y, b.x + b.size/2, b.y + b.size/2) < 30;
+  }
+
+  void reloadAmmo() {
+    ammo = min(ammo + 3, maxAmmo);
+  }
+}
+
+// === Projectile ===
+class Projectile {
+  float x, y;
+  int dir;
+  float speed = 10;
+
+  Projectile(float x, float y, int dir) {
+    this.x = x; this.y = y; this.dir = dir;
+  }
+
+  void update() {
+    x += speed * dir;
+  }
+
+  void display() {
+    fill(0);
+    ellipse(x, y, 10, 10);
+  }
+
+  boolean offscreen() {
+    return x < 0 || x > width;
+  }
+}
+
+// === Platform ===
+class Platform {
+  float x, y, w, h;
+  Platform(float x, float y, float w, float h) {
+    this.x = x; this.y = y; this.w = w; this.h = h;
+  }
+  void display() {
+    fill(20, 100, 20);
+    rect(x, y, w, h);
+  }
+}
+
+// === Box ===
+class Box {
+  float x, y;
+  int size = 30;
+  Box(float x, float y) {
+    this.x = x; this.y = y;
+  }
+  void display() {
+    fill(255, 215, 0);
+    rect(x, y, size, size);
+  }
+}
