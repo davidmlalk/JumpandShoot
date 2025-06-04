@@ -1,0 +1,356 @@
+Player playerA, playerB;
+ArrayList<Platform> platforms = new ArrayList<Platform>();
+ArrayList<Box> boxes = new ArrayList<Box>();
+
+// Textur-Arrays für Spieler (3 verschiedene Texturen)
+PImage[] playerTextures = new PImage[3];
+int selectedTextureA = 0;
+int selectedTextureB = 1;
+
+// Einzelne Texturen für Plattform, Box, Projektil
+PImage platformTexture;
+PImage boxTexture;
+PImage projectileTexture;
+
+final int SPRITE_SIZE = 32;
+
+enum GameState { MENU, PLAYING }
+GameState gameState = GameState.MENU;
+
+void setup() {
+  size(800, 600);
+  textSize(24);
+
+  // Lade Texturen (im data-Ordner!)
+  playerTextures[0] = loadImage("player0.png");
+  playerTextures[1] = loadImage("player1.png");
+  playerTextures[2] = loadImage("player2.png");
+
+  platformTexture = loadImage("platform.png");
+  boxTexture = loadImage("box.png");
+  projectileTexture = loadImage("projectile.png");
+
+  // Prüfen ob alle Texturen geladen sind
+  for (int i = 0; i < playerTextures.length; i++) {
+    if (playerTextures[i] == null) {
+      println("Spieler-Textur " + i + " fehlt!");
+      exit();
+    }
+  }
+  if (platformTexture == null || boxTexture == null || projectileTexture == null) {
+    println("Eine der Texturen für Plattform, Box oder Projektil fehlt!");
+    exit();
+  }
+  
+  // Setup Plattformen & Kisten vorbereiten, aber erst im Spielstart initialisieren
+}
+
+void draw() {
+  background(135, 206, 235); // Himmelblau
+
+  if (gameState == GameState.MENU) {
+    drawMenu();
+  } else if (gameState == GameState.PLAYING) {
+    drawGame();
+  }
+}
+
+void drawMenu() {
+  fill(0);
+  textAlign(CENTER);
+  text("Wähle Spieler-Texturen aus", width/2, 50);
+
+  // Spieler A Texturen anzeigen
+  text("Spieler A:", width/4, 100);
+  for (int i = 0; i < playerTextures.length; i++) {
+    if (i == selectedTextureA) stroke(255, 0, 0);
+    else noStroke();
+    image(playerTextures[i], width/4 - SPRITE_SIZE + i * (SPRITE_SIZE + 10), 120, SPRITE_SIZE, SPRITE_SIZE);
+  }
+
+  // Spieler B Texturen anzeigen
+  text("Spieler B:", 3 * width/4, 100);
+  for (int i = 0; i < playerTextures.length; i++) {
+    if (i == selectedTextureB) stroke(0, 0, 255);
+    else noStroke();
+    image(playerTextures[i], 3 * width/4 - SPRITE_SIZE + i * (SPRITE_SIZE + 10), 120, SPRITE_SIZE, SPRITE_SIZE);
+  }
+
+  noStroke();
+  text("Drücke ENTER zum Starten", width/2, height - 50);
+}
+
+void drawGame() {
+  // Plattformen anzeigen
+  for (Platform p : platforms) p.display();
+
+  // Kisten anzeigen
+  for (Box b : boxes) b.display();
+
+  // Spieler aktualisieren und anzeigen
+  playerA.update(platforms);
+  playerB.update(platforms);
+
+  playerA.checkProjectilesHit(playerB);
+  playerB.checkProjectilesHit(playerA);
+
+  playerA.display();
+  playerB.display();
+
+  // UI anzeigen
+  fill(0);
+  textAlign(LEFT);
+  text("Spieler A - Punkte: " + playerA.score + "  Munition: " + playerA.ammo, 20, 40);
+  textAlign(RIGHT);
+  text("Spieler B - Punkte: " + playerB.score + "  Munition: " + playerB.ammo, width - 20, 40);
+}
+
+void keyPressed() {
+  if (gameState == GameState.MENU) {
+    // Spieler A Auswahl mit Q/E
+    if (key == 'q' || key == 'Q') {
+      selectedTextureA = (selectedTextureA + playerTextures.length - 1) % playerTextures.length;
+    } else if (key == 'e' || key == 'E') {
+      selectedTextureA = (selectedTextureA + 1) % playerTextures.length;
+    }
+
+    // Spieler B Auswahl mit U/O
+    if (key == 'u' || key == 'U') {
+      selectedTextureB = (selectedTextureB + playerTextures.length - 1) % playerTextures.length;
+    } else if (key == 'o' || key == 'O') {
+      selectedTextureB = (selectedTextureB + 1) % playerTextures.length;
+    }
+
+    // Spiel starten mit Enter
+    if (key == ENTER || key == RETURN) {
+      startGame();
+    }
+  } else if (gameState == GameState.PLAYING) {
+    playerA.handleKeyPressed(key, keyCode);
+    playerB.handleKeyPressed(key, keyCode);
+  }
+}
+
+void keyReleased() {
+  if (gameState == GameState.PLAYING) {
+    playerA.handleKeyReleased(key, keyCode);
+    playerB.handleKeyReleased(key, keyCode);
+  }
+}
+
+void startGame() {
+  // Plattformen und Kisten neu anlegen (z.B. fix oder random)
+  platforms.clear();
+  platforms.add(new Platform(0, height - 50, width, 50, platformTexture));
+  platforms.add(new Platform(200, height - 150, 200, 30, platformTexture));
+  platforms.add(new Platform(500, height - 250, 150, 30, platformTexture));
+
+  boxes.clear();
+  boxes.add(new Box(250, height - 182, boxTexture));
+  boxes.add(new Box(550, height - 282, boxTexture));
+
+  // Spieler initialisieren mit gewählten Texturen
+  playerA = new Player(100, height - 82, playerTextures[selectedTextureA], 'a', 'd', 'w', 'e');
+  playerB = new Player(700, height - 82, playerTextures[selectedTextureB], LEFT, RIGHT, UP, DOWN);
+
+  gameState = GameState.PLAYING;
+}
+
+
+// --- Klassen ---
+
+class Player {
+  float x, y, yv = 0;
+  int facing = 1;
+  boolean left, right, jump, shoot, onGround = false;
+  ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
+  int score = 0, ammo = 5, maxAmmo = 10;
+  
+  char lK, rK, jK, sK;
+  int lKC, rKC, jKC, sKC;
+  boolean useKeyCode = false;
+  
+  PImage texture;
+  
+  Player(float x, float y, PImage texture, char lK, char rK, char jK, char sK) {
+    this.x = x;
+    this.y = y;
+    this.texture = texture;
+    this.lK = lK;
+    this.rK = rK;
+    this.jK = jK;
+    this.sK = sK;
+  }
+  
+  Player(float x, float y, PImage texture, int lKC, int rKC, int jKC, int sKC) {
+    this.x = x;
+    this.y = y;
+    this.texture = texture;
+    this.lKC = lKC;
+    this.rKC = rKC;
+    this.jKC = jKC;
+    this.sKC = sKC;
+    useKeyCode = true;
+  }
+  
+  void handleKeyPressed(char k, int kc) {
+    if (!useKeyCode) {
+      if (k == lK) left = true;
+      if (k == rK) right = true;
+      if (k == jK) jump = true;
+      if (k == sK) shoot = true;
+    } else {
+      if (kc == lKC) left = true;
+      if (kc == rKC) right = true;
+      if (kc == jKC) jump = true;
+      if (kc == sKC) shoot = true;
+    }
+  }
+  
+  void handleKeyReleased(char k, int kc) {
+    if (!useKeyCode) {
+      if (k == lK) left = false;
+      if (k == rK) right = false;
+      if (k == jK) jump = false;
+      if (k == sK) shoot = false;
+    } else {
+      if (kc == lKC) left = false;
+      if (kc == rKC) right = false;
+      if (kc == jKC) jump = false;
+      if (kc == sKC) shoot = false;
+    }
+  }
+  
+  void update(ArrayList<Platform> plats) {
+    if (left) { x -= 5; facing = -1; }
+    if (right) { x += 5; facing = 1; }
+    
+    if (jump && onGround) { yv = -15; onGround = false; }
+    
+    yv += 1;  // Schwerkraft
+    y += yv;
+    
+    onGround = false;
+    for (Platform p : plats) {
+      // Kollision mit Plattform (Hitbox auf Spritegröße abgestimmt)
+      if (x + SPRITE_SIZE/2 > p.x && x - SPRITE_SIZE/2 < p.x + p.w) {
+        if (y + SPRITE_SIZE/2 >= p.y && y + SPRITE_SIZE/2 <= p.y + p.h && yv >= 0) {
+          y = p.y - SPRITE_SIZE/2;
+          yv = 0;
+          onGround = true;
+        }
+      }
+    }
+    
+    // Spieler fällt unten raus → Respawn
+    if (y > height + 100) respawn();
+    
+    // Schießen
+    if (shoot && ammo > 0) {
+      projectiles.add(new Projectile(x + facing * SPRITE_SIZE/2, y, facing, projectileTexture));
+      ammo--;
+      shoot = false;
+    }
+    
+    // Projektile updaten
+    for (int i = projectiles.size() - 1; i >= 0; i--) {
+      Projectile p = projectiles.get(i);
+      p.update();
+      p.display();
+      if (p.offscreen()) projectiles.remove(i);
+    }
+  }
+  
+  void display() {
+    pushMatrix();
+    translate(x, y);
+    scale(facing, 1);  // Spieler nach links/rechts drehen
+    imageMode(CENTER);
+    image(texture, 0, 0, SPRITE_SIZE, SPRITE_SIZE);
+    popMatrix();
+  }
+  
+  void checkProjectilesHit(Player other) {
+    for (int i = projectiles.size() - 1; i >= 0; i--) {
+      Projectile p = projectiles.get(i);
+      if (dist(p.x, p.y, other.x, other.y) < SPRITE_SIZE/1.5) {
+        other.x += p.dir * -30;
+        other.yv = -10;
+        score++;
+        projectiles.remove(i);
+      }
+    }
+  }
+  
+  void respawn() {
+    if (this == playerA) x = 100;
+    else x = 700;
+    y = height - 82;
+    yv = 0;
+    ammo = maxAmmo;
+  }
+}
+
+class Projectile {
+  float x, y;
+  int dir;
+  float speed = 10;
+  PImage texture;
+  
+  Projectile(float x, float y, int dir, PImage texture) {
+    this.x = x;
+    this.y = y;
+    this.dir = dir;
+    this.texture = texture;
+  }
+  
+  void update() {
+    x += speed * dir;
+  }
+  
+  void display() {
+    imageMode(CENTER);
+    image(texture, x, y, SPRITE_SIZE/2, SPRITE_SIZE/2);
+  }
+  
+  boolean offscreen() {
+    return x < 0 || x > width;
+  }
+}
+
+class Platform {
+  float x, y, w, h;
+  PImage texture;
+  
+  Platform(float x, float y, float w, float h, PImage texture) {
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.texture = texture;
+  }
+  
+  void display() {
+    // Plattform aus gekachelten Texturen (damit keine Verzerrung)
+    int tiles = ceil(w / SPRITE_SIZE);
+    for (int i = 0; i < tiles; i++) {
+      image(texture, x + i * SPRITE_SIZE, y, SPRITE_SIZE, h);
+    }
+  }
+}
+
+class Box {
+  float x, y;
+  int size = SPRITE_SIZE;
+  PImage texture;
+  
+  Box(float x, float y, PImage texture) {
+    this.x = x;
+    this.y = y;
+    this.texture = texture;
+  }
+  
+  void display() {
+    image(texture, x + size/2, y + size/2, size, size);
+  }
+}
