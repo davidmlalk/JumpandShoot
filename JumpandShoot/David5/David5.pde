@@ -1,0 +1,248 @@
+PImage playerATextureLeft, playerATextureRight;
+PImage playerBTextureLeft, playerBTextureRight;
+PImage platformTexture;
+PImage projectileTexture;
+PImage backgroundTexture;
+PImage playerASprungTexture, playerBSprungTexture;
+PImage playerAHurtTexture, playerBHurtTexture;
+
+float xA = 150;
+float yA = -20;
+
+float xB = 1500 - 150;
+float yB = -20;
+
+boolean aLeft = false;
+boolean aRight = false;
+boolean aJump = false;
+
+boolean bLeft = false;
+boolean bRight = false;
+boolean bJump = false;
+
+boolean aFacingRight = true;
+boolean bFacingRight = false;
+
+float vyA = 0;
+float vyB = 0;
+float gravity = 0.8;
+float jumpStrength = -20;
+float playerRadius = 20;
+
+Platform[] platforms;
+ArrayList<Projectile> projectiles = new ArrayList<Projectile>();
+
+int shootCooldownA = 0;
+int shootCooldownB = 0;
+int cooldownTime = 20;
+
+boolean aWasHit = false;
+boolean bWasHit = false;
+int aHitCooldown = 0;
+int bHitCooldown = 0;
+int hitDisplayTime = 15;
+
+void setup() {
+  size(1500, 900);
+
+  backgroundTexture = loadImage("background.png");
+  playerATextureLeft = loadImage("playerA_left.png");
+  playerATextureRight = loadImage("playerA_right.png");
+  playerBTextureLeft = loadImage("playerB_left.png");
+  playerBTextureRight = loadImage("playerB_right.png");
+  playerASprungTexture = loadImage("playerA_jump.png");
+  playerBSprungTexture = loadImage("playerB_jump.png");
+  playerAHurtTexture = loadImage("playerA_hurt.png");
+  playerBHurtTexture = loadImage("playerB_hurt.png");
+  platformTexture = loadImage("platform.png");
+  projectileTexture = loadImage("projectile.png");
+
+  platforms = new Platform[9];
+  platforms[0] = new Platform(0, 500, 200, 20);
+  platforms[1] = new Platform(width - 200, 500, 200, 20);
+  platforms[2] = new Platform(300, 400, 200, 20);
+  platforms[3] = new Platform(width - 500, 400, 200, 20);
+  platforms[4] = new Platform(480, 550, 200, 20);
+  platforms[5] = new Platform(width - 730, 550, 200, 20);
+  platforms[6] = new Platform(100, 200, 200, 20);
+  platforms[7] = new Platform(width - 300, 200, 200, 20);
+  platforms[8] = new Platform(650, 200, 200, 20);
+}
+
+void draw() {
+  image(backgroundTexture, 0, 0, width, height);
+
+  for (Platform p : platforms) {
+    p.display();
+  }
+
+  // Spieler A Bewegung
+  if (aLeft) {
+    xA -= 5;
+    aFacingRight = false;
+  }
+  if (aRight) {
+    xA += 5;
+    aFacingRight = true;
+  }
+  yA += vyA;
+  boolean onGroundA = false;
+  for (Platform p : platforms) {
+    if (p.checkCollision(xA, yA, playerRadius, vyA)) {
+      yA = p.y - playerRadius;
+      vyA = 0;
+      onGroundA = true;
+    }
+  }
+  if (aJump && onGroundA) {
+    vyA = jumpStrength;
+  }
+  if (vyA < 19) {
+    vyA += gravity;
+  }
+
+  // Spieler B Bewegung
+  if (bLeft) {
+    xB -= 5;
+    bFacingRight = false;
+  }
+  if (bRight) {
+    xB += 5;
+    bFacingRight = true;
+  }
+  if (vyB < 19) {
+    vyB += gravity;
+  }
+  yB += vyB;
+  boolean onGroundB = false;
+  for (Platform p : platforms) {
+    if (p.checkCollision(xB, yB, playerRadius, vyB)) {
+      yB = p.y - playerRadius;
+      vyB = 0;
+      onGroundB = true;
+    }
+  }
+  if (bJump && onGroundB) {
+    vyB = jumpStrength;
+  }
+
+  // Spieler A Darstellung
+  if (aHitCooldown > 0) {
+    image(playerAHurtTexture, xA - 20, yA - 20, 40, 40);
+    aHitCooldown--;
+  } else if (!onGroundA) {
+    image(playerASprungTexture, xA - 20, yA - 20, 40, 40);
+  } else if (aFacingRight) {
+    image(playerATextureRight, xA - 20, yA - 20, 40, 40);
+  } else {
+    image(playerATextureLeft, xA - 20, yA - 20, 40, 40);
+  }
+
+  // Spieler B Darstellung
+  if (bHitCooldown > 0) {
+    image(playerBHurtTexture, xB - 20, yB - 20, 40, 40);
+    bHitCooldown--;
+  } else if (!onGroundB) {
+    image(playerBSprungTexture, xB - 20, yB - 20, 40, 40);
+  } else if (bFacingRight) {
+    image(playerBTextureRight, xB - 20, yB - 20, 40, 40);
+  } else {
+    image(playerBTextureLeft, xB - 20, yB - 20, 40, 40);
+  }
+
+  for (int i = projectiles.size() - 1; i >= 0; i--) {
+    Projectile proj = projectiles.get(i);
+    proj.update();
+    proj.display();
+
+    // Kollision mit Spieler A
+    if (dist(proj.x, proj.y, xA, yA) < playerRadius) {
+      xA += proj.speed * 5;
+      aHitCooldown = hitDisplayTime;
+      projectiles.remove(i);
+      continue;
+    }
+
+    // Kollision mit Spieler B
+    if (dist(proj.x, proj.y, xB, yB) < playerRadius) {
+      xB += proj.speed * 5;
+      bHitCooldown = hitDisplayTime;
+      projectiles.remove(i);
+      continue;
+    }
+
+    if (proj.offscreen()) {
+      projectiles.remove(i);
+    }
+  }
+
+  if (shootCooldownA > 0) shootCooldownA--;
+  if (shootCooldownB > 0) shootCooldownB--;
+
+  if (yA > height - 20 && yB > height - 20) {
+    xA = 150;
+    yA = -20;
+    xB = width - 150;
+    yB = -20;
+  }
+}
+
+void keyPressed() {
+  if (key == 'a') aLeft = true;
+  if (key == 'd') aRight = true;
+  if (key == 'w') aJump = true;
+
+  if (key == 's' && shootCooldownA == 0) {
+    float dir = aFacingRight ? 1 : -1;
+    projectiles.add(new Projectile(xA, yA, dir));
+    xA -= dir * 5;
+    shootCooldownA = cooldownTime;
+  }
+
+  if (keyCode == RIGHT) bRight = true;
+  if (keyCode == LEFT) bLeft = true;
+  if (keyCode == UP) bJump = true;
+
+  if (keyCode == DOWN && shootCooldownB == 0) {
+    float dir = bFacingRight ? 1 : -1;
+    projectiles.add(new Projectile(xB, yB, dir));
+    xB -= dir * 5;
+    shootCooldownB = cooldownTime;
+  }
+}
+
+void keyReleased() {
+  if (key == 'a') aLeft = false;
+  if (key == 'd') aRight = false;
+  if (key == 'w') aJump = false;
+
+  if (keyCode == LEFT) bLeft = false;
+  if (keyCode == RIGHT) bRight = false;
+  if (keyCode == UP) bJump = false;
+}
+
+class Projectile {
+  float x, y, speed;
+  Projectile(float x_, float y_, float dir) {
+    x = x_;
+    y = y_;
+    speed = dir * 10;
+  }
+  void update() {
+    x += speed;
+  }
+  void display() {
+    pushMatrix();
+    translate(x, y);
+    if (speed > 0) {
+      scale(1, 1);
+    } else {
+      scale(-1, 1);
+    }
+    image(projectileTexture, -5, -5, 10, 10);
+    popMatrix();
+  }
+  boolean offscreen() {
+    return x < 0 || x > width;
+  }
+}
